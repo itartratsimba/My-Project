@@ -210,7 +210,7 @@ public void dessiner(Graphics g) {
 }
 
     public boolean estSurPointMax(int vx, int vy) {
-        double dist = distance(vy, vy, pointMaxX, pointMaxY);
+        double dist = distance(vx, vy, pointMaxX, pointMaxY);
         if (dist <= 10) {
             return true;
         }

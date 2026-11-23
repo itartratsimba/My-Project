@@ -23,6 +23,12 @@ public class Joueur {
         }
     }
 
+    // Remet a zero le score de la partie en cours, pas le record
+    public void reinitialiser() {
+        this.score = 0;
+        this.nbTirs = 0;
+    }
+
     public int getId() {
         return id;
     }
@@ -52,6 +58,6 @@ public class Joueur {
     }
 
     public String toString() {
-        return nom + " (Meilleur score : " + meilleurScore + " pts    )";
+        return nom + " (Meilleur score : " + meilleurScore + " pts)";
     }
 }

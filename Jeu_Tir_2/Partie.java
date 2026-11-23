@@ -3,7 +3,13 @@ package jeu;
 import utilitaires.Connexion;
 import java.sql.ResultSet;
 
+// Chrono unique pour toute la partie (pas 15 secondes par joueur).
+// A la fin : une ligne dans la table PARTIE, et les scores dans HISTORIQUE.
 public class Partie {
+
+    private static final String[] NOMS_PAR_DEFAUT = {
+        "Alex", "Alice", "Sam", "Lina", "Noah", "Maya"
+    };
 
     private Joueur joueur; // Joueur actif actuel
     private Joueur[] listeJoueurs; // Liste de tous les joueurs
@@ -24,9 +30,11 @@ public class Partie {
     private Tir[] listeTirs;
     private int nbTirsEffectues;
     private boolean dejaSauvegardee;
+    private int idPartie;
+    private int tentativesSauvegarde;
 
     public Partie(int duree) throws Exception {
-        this.dernierMessage = "";
+        this.dernierMessage = "Partie de " + duree + " s pour tous les joueurs";
         this.viseur = new Viseur(400, 400);
         this.dernierTableauId = -1;
         this.combo = 0;
@@ -35,25 +43,92 @@ public class Partie {
         this.tempsRestant = duree;
         this.estTerminee = false;
         this.dejaSauvegardee = false;
+        this.idPartie = 0;
+        this.tentativesSauvegarde = 0;
 
         this.listeTirs = new Tir[200];
         this.nbTirsEffectues = 0;
 
-        // 1. Charger tous les joueurs depuis Oracle
+        // 1. Table partie + colonne historique.id_partie si besoin
+        assurerSchema();
+
+        // 2. Noms des joueurs (Alex, Alice, ...)
+        assurerJoueurs();
+
+        // 3. Charger tous les joueurs depuis Oracle
         chargerTousLesJoueurs();
 
-        // 2. Charger les tableaux
+        // 4. Charger les tableaux
         chargerTableaux();
+
+        System.out.println("Partie de " + duree + " s commune a tous les joueurs.");
+    }
+
+    private void assurerSchema() {
+        Connexion c = new Connexion();
+
+        if (!requeteRetourneUneLigne(
+                "SELECT table_name FROM user_tables WHERE table_name = 'PARTIE'")) {
+            c.executer("CREATE TABLE partie ("
+                    + "id_partie NUMBER PRIMARY KEY, "
+                    + "date_partie TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+                    + "duree NUMBER DEFAULT 15)");
+        } else if (!requeteRetourneUneLigne(
+                "SELECT column_name FROM user_tab_columns "
+                        + "WHERE table_name = 'PARTIE' AND column_name = 'DUREE'")) {
+            c.executer("ALTER TABLE partie ADD (duree NUMBER DEFAULT 15)");
+        }
+
+        if (!requeteRetourneUneLigne(
+                "SELECT column_name FROM user_tab_columns "
+                        + "WHERE table_name = 'HISTORIQUE' AND column_name = 'ID_PARTIE'")) {
+            c.executer("ALTER TABLE historique ADD (id_partie NUMBER)");
+        }
+    }
+
+    private void assurerJoueurs() {
+        Connexion c = new Connexion();
+
+        // Anciens noms generiques -> vrais prenoms
+        c.executer("UPDATE joueur SET nom = 'Alex' WHERE LOWER(nom) = 'joueur1'");
+        c.executer("UPDATE joueur SET nom = 'Alice' WHERE LOWER(nom) = 'joueur2'");
+
+        for (int i = 0; i < NOMS_PAR_DEFAUT.length; i++) {
+            String nom = NOMS_PAR_DEFAUT[i];
+            String req = "INSERT INTO joueur (id, nom, meilleur_score) "
+                    + "SELECT (SELECT NVL(MAX(id), 0) + 1 FROM joueur), '" + nom + "', 0 FROM dual "
+                    + "WHERE NOT EXISTS (SELECT 1 FROM joueur WHERE LOWER(nom) = '"
+                    + nom.toLowerCase() + "')";
+            c.executer(req);
+        }
+    }
+
+    private boolean requeteRetourneUneLigne(String requete) {
+        ResultSet rs = null;
+        Connexion c = new Connexion();
+        try {
+            rs = c.getAllLines(requete);
+            return rs != null && rs.next();
+        } catch (Exception e) {
+            System.out.println("Erreur schema: " + e.getMessage());
+            return false;
+        } finally {
+            try {
+                c.fermerConnexion(rs);
+            } catch (Exception e) {
+                // rien
+            }
+        }
     }
 
     private void chargerTousLesJoueurs() throws Exception {
         Connexion c = new Connexion();
         ResultSet rs = c.getAllLines("SELECT * FROM joueur ORDER BY id");
 
-        listeJoueurs = new Joueur[20];
+        listeJoueurs = new Joueur[50];
         nbJoueurs = 0;
 
-        while (rs != null && rs.next()) {
+        while (rs != null && rs.next() && nbJoueurs < listeJoueurs.length) {
             int id = rs.getInt("id");
             String nom = rs.getString("nom");
             int meilleur = rs.getInt("meilleur_score");
@@ -67,14 +142,25 @@ public class Partie {
         if (nbJoueurs > 0) {
             this.joueur = listeJoueurs[0];
         }
+
+        System.out.println(nbJoueurs + " joueur(s) charge(s) :");
+        for (int i = 0; i < nbJoueurs; i++) {
+            System.out.println(" - " + listeJoueurs[i].getNom());
+        }
     }
 
-    // Méthode pour changer de joueur actif quand on clique sur un onglet
+    // Change le joueur actif sans relancer le chrono ni effacer les scores
     public void changerJoueur(int index) {
         if (index >= 0 && index < nbJoueurs) {
             this.joueur = listeJoueurs[index];
-            recommencer(); // Réinitialiser le score et le temps pour le nouveau joueur
-            dernierMessage = "Joueur actif : " + joueur.getNom();
+            this.combo = 0;
+            this.dernierTableauId = -1;
+            if (estTerminee) {
+                dernierMessage = "Partie terminée. Joueur : " + joueur.getNom();
+            } else {
+                dernierMessage = joueur.getNom()
+                        + " joue - le chrono continue (" + tempsRestant + " s)";
+            }
         }
     }
 
@@ -85,7 +171,7 @@ public class Partie {
         tableaux = new Tableau[20];
         nbTableaux = 0;
 
-        while (rs.next()) {
+        while (rs.next() && nbTableaux < tableaux.length) {
             int id = rs.getInt("id");
             int x = rs.getInt("x");
             int y = rs.getInt("y");
@@ -104,6 +190,10 @@ public class Partie {
 
     public void tick() {
         if (estTerminee) {
+            if (!dejaSauvegardee && tentativesSauvegarde < 3) {
+                tentativesSauvegarde++;
+                sauvegarder();
+            }
             return;
         }
 
@@ -112,17 +202,19 @@ public class Partie {
         if (tempsRestant <= 0) {
             tempsRestant = 0;
             estTerminee = true;
-
-            if (!dejaSauvegardee) {
-                sauvegarder();
-                dernierMessage = "TEMPS ECOULE ! Partie enregistree automatiquement !";
-            }
+            tentativesSauvegarde++;
+            sauvegarder();
         }
     }
 
     public int tirer() {
+        if (joueur == null) {
+            dernierMessage = "Aucun joueur sélectionné";
+            return 0;
+        }
+
         if (estTerminee) {
-            dernierMessage = "Partie terminee ! Appuie sur R pour recommencer";
+            dernierMessage = "Partie terminée ! Appuie sur R pour recommencer";
             return 0;
         }
 
@@ -168,39 +260,104 @@ public class Partie {
     }
 
     public void recommencer() {
+        for (int i = 0; i < nbJoueurs; i++) {
+            listeJoueurs[i].reinitialiser();
+        }
         tempsRestant = duree;
         estTerminee = false;
         dejaSauvegardee = false;
+        idPartie = 0;
+        tentativesSauvegarde = 0;
         combo = 0;
         dernierTableauId = -1;
         nbTirsEffectues = 0;
-        joueur.setScore(0);
+        dernierMessage = "Nouvelle partie : " + duree + " s pour tous les joueurs";
     }
 
     public void sauvegarder() {
-        if (dejaSauvegardee || joueur == null) {
+        if (dejaSauvegardee || !estTerminee || nbJoueurs == 0) {
             return;
         }
 
         Connexion c = new Connexion();
+        int avant = lireDernierIdPartie();
+        boolean aDuree = requeteRetourneUneLigne(
+                "SELECT column_name FROM user_tab_columns "
+                        + "WHERE table_name = 'PARTIE' AND column_name = 'DUREE'");
 
-        String reqHistorique = "INSERT INTO historique (id, id_joueur, score, nb_tirs) VALUES ("
-                + "(SELECT NVL(MAX(id), 0) + 1 FROM historique), "
-                + joueur.getId() + ", "
-                + joueur.getScore() + ", "
-                + joueur.getNbTirs() + ")";
-        c.executer(reqHistorique);
+        if (aDuree) {
+            c.executer("INSERT INTO partie (id_partie, duree) VALUES ("
+                    + "(SELECT NVL(MAX(id_partie), 0) + 1 FROM partie), " + duree + ")");
+        } else {
+            c.executer("INSERT INTO partie (id_partie) VALUES ("
+                    + "(SELECT NVL(MAX(id_partie), 0) + 1 FROM partie))");
+        }
 
-        if (joueur.getScore() > joueur.getMeilleurScore()) {
-            String reqMeilleur = "UPDATE joueur SET meilleur_score = "
-                    + joueur.getScore()
-                    + " WHERE id = " + joueur.getId();
-            c.executer(reqMeilleur);
-            joueur.setMeilleurScore(joueur.getScore());
+        int apres = lireDernierIdPartie();
+        if (apres > avant) {
+            idPartie = apres;
+        } else {
+            idPartie = 0;
+            dernierMessage = "TEMPS ÉCOULÉ ! Impossible d'écrire dans la table partie.";
+            return;
+        }
+
+        boolean avecIdPartie = requeteRetourneUneLigne(
+                "SELECT column_name FROM user_tab_columns "
+                        + "WHERE table_name = 'HISTORIQUE' AND column_name = 'ID_PARTIE'");
+
+        for (int i = 0; i < nbJoueurs; i++) {
+            Joueur j = listeJoueurs[i];
+            String reqHistorique;
+            if (avecIdPartie) {
+                reqHistorique = "INSERT INTO historique (id, id_joueur, score, nb_tirs, id_partie) VALUES ("
+                        + "(SELECT NVL(MAX(id), 0) + 1 FROM historique), "
+                        + j.getId() + ", "
+                        + j.getScore() + ", "
+                        + j.getNbTirs() + ", "
+                        + idPartie + ")";
+            } else {
+                reqHistorique = "INSERT INTO historique (id, id_joueur, score, nb_tirs) VALUES ("
+                        + "(SELECT NVL(MAX(id), 0) + 1 FROM historique), "
+                        + j.getId() + ", "
+                        + j.getScore() + ", "
+                        + j.getNbTirs() + ")";
+            }
+            c.executer(reqHistorique);
+
+            if (j.getScore() > j.getMeilleurScore()) {
+                String reqMeilleur = "UPDATE joueur SET meilleur_score = "
+                        + j.getScore()
+                        + " WHERE id = " + j.getId();
+                c.executer(reqMeilleur);
+                j.setMeilleurScore(j.getScore());
+            }
         }
 
         dejaSauvegardee = true;
-        System.out.println("Partie sauvegardee pour " + joueur.getNom());
+        dernierMessage = "TEMPS ÉCOULÉ ! Partie n° " + idPartie + " enregistrée.";
+        System.out.println("Partie #" + idPartie + " sauvegardee ("
+                + duree + " s, " + nbJoueurs + " joueurs).");
+    }
+
+    private int lireDernierIdPartie() {
+        ResultSet rs = null;
+        Connexion c = new Connexion();
+        try {
+            rs = c.getAllLines("SELECT NVL(MAX(id_partie), 0) AS idp FROM partie");
+            if (rs != null && rs.next()) {
+                return rs.getInt("idp");
+            }
+        } catch (Exception e) {
+            System.out.println("Erreur lecture partie: " + e.getMessage());
+        } finally {
+            try {
+                c.fermerConnexion(rs);
+            } catch (Exception e) {
+                // rien
+            }
+        }
+        return 0;
     }
 
     public ResultatPartie[] chargerHistorique() {
@@ -233,6 +390,37 @@ public class Partie {
             resultat[i] = histo[i];
         }
         return resultat;
+    }
+
+    // Copie triee : score de la partie, puis record, puis nom
+    public Joueur[] getJoueursClasses() {
+        Joueur[] copie = new Joueur[nbJoueurs];
+        for (int i = 0; i < nbJoueurs; i++) {
+            copie[i] = listeJoueurs[i];
+        }
+
+        for (int i = 0; i < copie.length - 1; i++) {
+            for (int j = i + 1; j < copie.length; j++) {
+                if (compareJoueurs(copie[j], copie[i]) < 0) {
+                    Joueur tmp = copie[i];
+                    copie[i] = copie[j];
+                    copie[j] = tmp;
+                }
+            }
+        }
+        return copie;
+    }
+
+    private int compareJoueurs(Joueur a, Joueur b) {
+        if (a.getScore() != b.getScore()) {
+            return b.getScore() - a.getScore();
+        }
+        if (a.getMeilleurScore() != b.getMeilleurScore()) {
+            return b.getMeilleurScore() - a.getMeilleurScore();
+        }
+        String na = a.getNom() == null ? "" : a.getNom();
+        String nb = b.getNom() == null ? "" : b.getNom();
+        return na.compareToIgnoreCase(nb);
     }
 
     // Getters
@@ -274,6 +462,10 @@ public class Partie {
 
     public int getDuree() {
         return duree;
+    }
+
+    public int getIdPartie() {
+        return idPartie;
     }
 
     public boolean isEstTerminee() {

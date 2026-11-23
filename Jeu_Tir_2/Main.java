@@ -6,10 +6,13 @@ import aff.Fenetre;
 public class Main {
     public static void main(String[] args) throws Exception {
 
-        // Lancer la partie directement avec une durée de 60 secondes
+        // Une seule partie de 15 secondes pour tous les joueurs.
+        // Changer de joueur ne relance pas le chrono.
         Partie partie = new Partie(15);
         Fenetre fenetre = new Fenetre(partie);
 
-        System.out.println("Jeu de Tir lance ! Selection des joueurs directement en haut de l'ecran.");
+        System.out.println("Jeu de Tir lance !");
+        System.out.println("Partie de 15 secondes commune a tous les joueurs.");
+        System.out.println("Classement et recherche par nom : panneau de droite.");
     }
 }
