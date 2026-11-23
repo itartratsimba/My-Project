@@ -39,6 +39,13 @@ CREATE TABLE historique (
     date_partie TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Table partie
+CREATE TABLE partie (
+    id_partie NUMBER PRIMARY KEY,
+    date_partie TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
 -- Insérer les joueurs
 INSERT INTO joueur VALUES (1, 'Joueur1', 0);
 INSERT INTO joueur VALUES (2, 'Joueur2', 0);
