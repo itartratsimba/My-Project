@@ -21,13 +21,33 @@ public class Ecoute implements MouseListener, MouseMotionListener, KeyListener {
         this.partie = partie;
     }
 
-    public void mouseClicked(MouseEvent e) {
-        partie.getViseur().setX(e.getX());
-        partie.getViseur().setY(e.getY());
-        partie.tirer();
-        fenetre.getDessin().repaint();
+// Dans utilitaire/Ecoute.java :
+
+public void mouseClicked(MouseEvent e) {
+    int mx = e.getX();
+    int my = e.getY();
+
+    // === CLIC SUR LA BARRE DU HAUT (SÉLECTION JOUEUR) ===
+    if (my >= 5 && my <= 35) {
+        int tabWidth = 140;
+        for (int i = 0; i < partie.getNbJoueurs(); i++) {
+            int tabX = 10 + i * (tabWidth + 10);
+            
+            // Si le clic est à l'intérieur de l'onglet i
+            if (mx >= tabX && mx <= tabX + tabWidth) {
+                partie.changerJoueur(i);
+                fenetre.getDessin().repaint();
+                return; // On arrête là, ce n'est pas un tir !
+            }
+        }
     }
 
+    // === CLIC NORMAL = TIR ===
+    partie.getViseur().setX(mx);
+    partie.getViseur().setY(my);
+    partie.tirer();
+    fenetre.getDessin().repaint();
+}
     public void mouseMoved(MouseEvent e) {
         partie.getViseur().setX(e.getX());
         partie.getViseur().setY(e.getY());

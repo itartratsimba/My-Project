@@ -52,7 +52,6 @@ public class Joueur {
     }
 
     public String toString() {
-        return nom + " | score: " + score + " | tirs: " + nbTirs
-                + " | meilleur: " + meilleurScore;
+        return nom + " (Meilleur score : " + meilleurScore + " pts    )";
     }
 }

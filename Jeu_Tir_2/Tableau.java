@@ -121,6 +121,7 @@ package jeu;
 
 import java.awt.Color;
 import java.awt.Graphics;
+import java.awt.Font;
 
 public class Tableau {
 
@@ -189,41 +190,24 @@ public class Tableau {
         return (int) Math.round(points);
     }
 
-    public void dessiner(Graphics g) {
-        // Dessiner le tableau
-        g.setColor(new Color(230, 230, 230));
-        g.fillRect(x, y, largeur, hauteur);
-        g.setColor(Color.BLACK);
-        g.drawRect(x, y, largeur, hauteur);
+// Dans Tableau.java, remplace la méthode dessiner(Graphics g) par :
 
-        // Dessiner les cercles de distance
-        // int nbCercles = 4;
-        // Color[] couleurs = {
-        // new Color(255, 200, 200),
-        // new Color(255, 255, 150),
-        // new Color(150, 255, 150),
-        // new Color(100, 200, 255)
-        // };
+public void dessiner(Graphics g) {
+    // 1. Rectangle du tableau (gris clair)
+    g.setColor(Color.LIGHT_GRAY);
+    g.fillRect(x, y, largeur, hauteur);
+    g.setColor(Color.BLACK);
+    g.drawRect(x, y, largeur, hauteur);
 
-        // for (int i = 0; i < nbCercles; i++) {
-        // double fraction = (i + 1) * distanceMax / nbCercles;
-        // int r = (int) fraction;
-        // g.setColor(couleurs[i]);
-        // g.fillOval(pointMaxX - r, pointMaxY - r, r * 2, r * 2);
-        // g.setColor(Color.GRAY);
-        // g.drawOval(pointMaxX - r, pointMaxY - r, r * 2, r * 2);
-        // }
+    // 2. Le point max (petit rond rouge)
+    g.setColor(Color.RED);
+    g.fillOval(pointMaxX - 5, pointMaxY - 5, 10, 10);
 
-        // Dessiner le pointMax
-        g.setColor(Color.RED);
-        g.fillOval(pointMaxX - 5, pointMaxY - 5, 10, 10);
-        g.setColor(Color.WHITE);
-        g.fillOval(pointMaxX - 2, pointMaxY - 2, 4, 4);
-
-        // Texte
-        g.setColor(Color.BLACK);
-        g.drawString("Tableau #" + id + " (max:" + pointMax + "pts)", x + 5, y + 15);
-    }
+    // 3. Texte du tableau
+    g.setColor(Color.BLACK);
+    g.setFont(new Font("Arial", Font.PLAIN, 12));
+    g.drawString("Tableau #" + id + " (" + pointMax + " pts)", x + 5, y + 15);
+}
 
     public boolean estSurPointMax(int vx, int vy) {
         double dist = distance(vy, vy, pointMaxX, pointMaxY);
