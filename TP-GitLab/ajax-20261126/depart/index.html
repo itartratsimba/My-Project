@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Accueil</title>
+  <link rel="stylesheet" href="style.css">
+  <script defer>
+    async function chargerMembre() {
+      const response = await fetch("moi.php");
+      if (response.status === 401) {          // pas connecté : retour au login
+        window.location.href = "login.html";
+        return;
+      }
+      const data = await response.json();
+      document.getElementById("nom").textContent = data.membre.nom;
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("logout").addEventListener("click", async () => {
+        await fetch("logout.php");
+        window.location.href = "login.html";
+      });
+      chargerMembre();
+    });
+  </script>
+</head>
+<body>
+  <main class="carte">
+    <h1>Bienvenue <span id="nom"></span></h1>
+    <p>La connexion fonctionne.</p>
+    <button id="logout" type="button" class="secondaire">Déconnexion</button>
+  </main>
+</body>
+</html>
